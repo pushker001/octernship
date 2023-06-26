@@ -27,6 +27,9 @@ import { UserWhereUniqueInput } from "./UserWhereUniqueInput";
 import { UserFindManyArgs } from "./UserFindManyArgs";
 import { UserUpdateInput } from "./UserUpdateInput";
 import { User } from "./User";
+import { plainToClass } from "class-transformer";
+import { UserCountArgs } from "./UserCountArgs";
+
 
 @swagger.ApiBearerAuth()
 @common.UseGuards(defaultAuthGuard.DefaultAuthGuard, nestAccessControl.ACGuard)
@@ -73,21 +76,33 @@ export class UserControllerBase {
   @swagger.ApiForbiddenResponse({
     type: errors.ForbiddenException,
   })
-  async findMany(@common.Req() request: Request): Promise<User[]> {
+  async findMany(@common.Req() request: Request): Promise<[count: number, users: User[]]> {
     const args = plainToClass(UserFindManyArgs, request.query);
-    return this.service.findMany({
-      ...args,
-      select: {
-        createdAt: true,
-        firstName: true,
-        id: true,
-        lastName: true,
-        roles: true,
-        updatedAt: true,
-        username: true,
-      },
-    });
+    const count = await this.service.count(args); // Get the count
+    const users = await this.service.findMany(args); // Get the users
+    return {
+      count,
+      users,
+    };
   }
+  
+  @common.Get("/count")
+  @swagger.ApiOkResponse({ type: Number })
+  @nestAccessControl.UseRoles({
+    resource: "User",
+    action: "read",
+    possession: "any",
+  })
+  @swagger.ApiForbiddenResponse({
+    type: errors.ForbiddenException,
+  })
+  async count(@common.Req() request: Request): Promise<number> {
+    const args = plainToClass(UserCountArgs, request.query);
+    return this.service.count(args);
+  }
+
+  @common.UseInterceptors(AclFilterResponseInterceptor)
+  @common.Get
 
   @common.UseInterceptors(AclFilterResponseInterceptor)
   @common.Get("/:id")
